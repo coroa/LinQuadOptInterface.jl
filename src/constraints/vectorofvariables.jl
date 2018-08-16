@@ -15,6 +15,48 @@ constrdict(model::LinQuadOptimizer, ::VVCI{MOI.Zeros}) = cmap(model).vv_zeros
 constrdict(model::LinQuadOptimizer, ::VVCI{SOS1}) = cmap(model).sos1
 constrdict(model::LinQuadOptimizer, ::VVCI{SOS2}) = cmap(model).sos2
 
+
+function set_variable_bound(model::LinQuadOptimizer, columns::Vector{Int}, bounds::Vector{Float64}, sense)
+    @assert length(columns) == length(bounds)
+    change_variable_bounds!(model, columns, bounds, sense)
+end
+
+function set_variable_bound(model::LinQuadOptimizer, vs::Vector{VarInd}, sets::Vector{LE})
+    set_variable_bound(model, get_column.(model, vs), [s.upper for s=sets],
+                       fill(backend_type(model, Val{:Upperbound}()), length(vs)))
+end
+function set_variable_bound(model::LinQuadOptimizer, vs::Vector{VarInd}, sets::Vector{GE})
+    set_variable_bound(model, get_column.(model, vs), [s.lower for s=sets],
+                       fill(backend_type(model, Val{:Lowerbound}()), length(vs)))
+end
+function set_variable_bound(model::LinQuadOptimizer, vs::Vector{VarInd}, sets::Vector{EQ})
+    set_variable_bound(model, get_column.(model, vs), [s.value for s=sets],
+                       fill(backend_type(model, Val{:Upperbound}()), length(vs)))
+    set_variable_bound(model, get_column.(model, vs), [s.value for s=sets],
+                       fill(backend_type(model, Val{:Lowerbound}()), length(vs)))
+end
+function set_variable_bound(model::LinQuadOptimizer, vs::Vector{VarInd}, sets::Vector{IV})
+    set_variable_bound(model, get_column(model, v), [s.upper for s=sets],
+                       fill(backend_type(model, Val{:Upperbound}()), length(vs)))
+    set_variable_bound(model, get_column(model, v), [s.lower for s=sets],
+                       fill(backend_type(model, Val{:Lowerbound}()), length(vs)))
+end
+
+function MOI.addconstraints!(model::LinQuadOptimizer, funcs::VecVar, sets::Vector{S}) where S <: LinSets
+    # __assert_supported_constraint__(model, VecVar, S)
+    # __check_for_conflicting__(model, variable, set,
+    # S, MOI.Semicontinuous{Float64}, MOI.Semiinteger{Float64}, MOI.ZeroOne)
+    num_vars = length(sets)
+    set_variable_bound(model, funcs.variables, sets)
+    # TODO we have to return some sort of constrdict here, need help!
+
+    # model.last_constraint_reference += 1
+    # index = VVCI{S}(model.last_constraint_reference)
+    # dict = constrdict(model, index)
+    # dict[index] = variable.variable
+    # return index
+end
+
 function MOI.addconstraint!(model::LinQuadOptimizer, func::VecVar, set::S) where S <: VecLinSets
     __assert_supported_constraint__(model, VecVar, S)
     @assert length(func.variables) == MOI.dimension(set)
